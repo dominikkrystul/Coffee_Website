@@ -1,0 +1,10 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+playwright-report/
+test-results/
+qr-tables.html
+.env*
+.npm-cache/
+.playwright/
