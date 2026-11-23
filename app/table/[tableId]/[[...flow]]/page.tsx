@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Footer, Header } from "../../../../components/chrome";
 import { Ordering, type Screen } from "../../../../components/ordering";
+import { orderMode } from "../../../../lib/order-service.server";
+import { orderUuid } from "../../../../lib/orders";
 import { findCoffee, isTableId } from "../../../../lib/catalog";
 
 type Props = {
@@ -38,12 +40,12 @@ export default async function TablePage({ params }: Props) {
     screen = { name: section };
   } else if (flow.length === 2 && section === "coffee" && findCoffee(id)) {
     screen = { name: "product", productId: id };
-  } else if (flow.length === 3 && section === "order" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) {
+  } else if (flow.length === 3 && section === "order" && orderUuid.test(id)) {
     if (action !== "confirmation" && action !== "tracking") notFound();
     screen = { name: action, orderId: id };
   } else {
     notFound();
   }
 
-  return <Ordering tableId={tableId} screen={screen} />;
+  return <Ordering tableId={tableId} screen={screen} mode={orderMode()} />;
 }

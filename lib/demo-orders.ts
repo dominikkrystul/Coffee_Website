@@ -12,6 +12,8 @@ type TableState = {
   cart: CartSelection | null;
   orders: Record<string, DemoOrder>;
   latestOrderId?: string;
+  latestLiveOrderId?: string;
+  liveTokens?: Record<string, string>;
 };
 
 const storageKey = (tableId: TableId) => `t3-coffee:v1:${tableId}`;
@@ -180,5 +182,17 @@ export function setDemoStatus(tableId: TableId, id: string, status: OrderStatus)
     if (!order) return;
     order.status = status;
     delete order.playbackStartedAt;
+  });
+}
+
+export function liveOrderToken(tableId: TableId, id: string) {
+  return readTable(tableId).liveTokens?.[id];
+}
+
+export function rememberLiveOrder(tableId: TableId, selectionId: string, orderId: string, token: string) {
+  return updateTable(tableId, (state) => {
+    (state.liveTokens ??= {})[orderId] = token;
+    state.latestLiveOrderId = orderId;
+    if (state.cart?.id === selectionId) state.cart = null;
   });
 }

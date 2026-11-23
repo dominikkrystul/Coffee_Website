@@ -11,7 +11,8 @@ import { easeOut } from "./motion-tokens";
 import { OrderScreen } from "./order-screen";
 import { chf, coffees, findCoffee, type CoffeeProduct, type TableId } from "../lib/catalog";
 import { demoOrderAdapter, readSnapshot, removeCoffee, selectCoffee, storageSnapshot, subscribeToTable } from "../lib/demo-orders";
-import type { CartSelection } from "../lib/orders";
+import { httpOrderAdapter } from "../lib/http-orders";
+import type { CartSelection, OrderMode } from "../lib/orders";
 
 export type Screen =
   | { name: "menu" | "cart" | "checkout" }
@@ -34,7 +35,7 @@ function Total({ price }: { price: number }) {
   return <div className="total"><strong>Total</strong><strong className="price">{chf(price)}</strong></div>;
 }
 
-function Menu({ base, tableId, hasCart, latest }: { base: string; tableId: TableId; hasCart: boolean; latest?: string }) {
+function Menu({ base, tableId, hasCart, latest, mode }: { base: string; tableId: TableId; hasCart: boolean; latest?: string; mode: OrderMode }) {
   return (
     <>
       <CoffeeHero />
@@ -56,7 +57,7 @@ function Menu({ base, tableId, hasCart, latest }: { base: string; tableId: Table
             </motion.li>
           ))}
         </ul>
-        {latest && <Link className="text-link past-order" href={`${base}/order/${latest}/tracking`}>Track your latest demo order <ArrowRight size={16} /></Link>}
+        {latest && <Link className="text-link past-order" href={`${base}/order/${latest}/tracking`}>{mode === "live" ? "Track your latest order" : "Track your latest demo order"} <ArrowRight size={16} /></Link>}
       </div>
       {hasCart && (
         <div className="action-bar">
@@ -128,10 +129,11 @@ function Product({ base, tableId, product, selection }: { base: string; tableId:
   );
 }
 
-function Basket({ base, tableId, selection, latest, ready, checkout }: {
-  base: string; tableId: TableId; selection: CartSelection | null; latest?: string; ready: boolean; checkout: boolean;
+function Basket({ base, tableId, selection, latest, ready, checkout, mode }: {
+  base: string; tableId: TableId; selection: CartSelection | null; latest?: string; ready: boolean; checkout: boolean; mode: OrderMode;
 }) {
   const router = useRouter();
+  const live = mode === "live";
   const submitting = useRef(false);
   const [pending, setPending] = useState<CartSelection | null>(null);
   const [error, setError] = useState("");
@@ -147,10 +149,10 @@ function Basket({ base, tableId, selection, latest, ready, checkout }: {
     setPending(item);
     setError("");
     try {
-      const { order } = await demoOrderAdapter.submit({ id: item.id, tableId, productId: item.productId, quantity: 1 });
+      const { order } = await (live ? httpOrderAdapter : demoOrderAdapter).submit({ id: item.id, tableId, productId: item.productId, quantity: 1 });
       router.push(`${base}/order/${order.id}/confirmation`);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "We could not save your demo order. Try again.");
+      setError(error instanceof Error ? error.message : "Could not reach the order service. Try again.");
       submitting.current = false;
       setPending(null);
     }
@@ -189,7 +191,11 @@ function Basket({ base, tableId, selection, latest, ready, checkout }: {
             {checkout && (
               <aside className="notice">
                 <Info aria-hidden="true" size={20} />
-                <div><strong>Demo checkout</strong><p>No real payment will be processed. This order is part of the Robot Coffee Cup demonstration.</p></div>
+                <div>
+                  <strong>{live ? "Coffee Cup checkout" : "Demo checkout"}</strong>
+                  <p>{live ? "No payment is collected. The café will prepare your order and dispatch it when ready." :
+                    "No real payment will be processed. This order is part of the Robot Coffee Cup demonstration."}</p>
+                </div>
               </aside>
             )}
             {error && <p className="error" role="alert">{error}</p>}
@@ -200,7 +206,7 @@ function Basket({ base, tableId, selection, latest, ready, checkout }: {
             <h2 tabIndex={-1} ref={emptyTitle}>Your cart is empty</h2>
             <p>Choose a coffee from the menu.</p>
             <Link href={base} className="button secondary">Browse menu<ArrowRight size={19} /></Link>
-            {latest && <Link className="text-link" href={`${base}/order/${latest}/tracking`}>Track your latest demo order</Link>}
+            {latest && <Link className="text-link" href={`${base}/order/${latest}/tracking`}>{mode === "live" ? "Track your latest order" : "Track your latest demo order"}</Link>}
           </motion.div>
         )}
       </div>
@@ -209,7 +215,7 @@ function Basket({ base, tableId, selection, latest, ready, checkout }: {
           {checkout ? (
             <button className="button primary" onClick={submit} disabled={pending !== null} aria-busy={pending !== null}>
               {pending && <LoaderCircle className="processing-icon" size={17} aria-hidden="true" />}
-              {pending ? "Placing demo order…" : "Place Demo Order"}<ArrowRight className="action-arrow" size={19} aria-hidden="true" />
+              {pending ? (live ? "Placing order…" : "Placing demo order…") : live ? "Place Order" : "Place Demo Order"}<ArrowRight className="action-arrow" size={19} aria-hidden="true" />
             </button>
           ) : (
             <Link href={`${base}/checkout`} className="button primary">Continue to Checkout<ArrowRight className="action-arrow" size={19} aria-hidden="true" /></Link>
@@ -220,21 +226,22 @@ function Basket({ base, tableId, selection, latest, ready, checkout }: {
   );
 }
 
-export function Ordering({ tableId, screen }: { tableId: TableId; screen: Screen }) {
+export function Ordering({ tableId, screen, mode }: { tableId: TableId; screen: Screen; mode: OrderMode }) {
   const base = `/table/${tableId}`;
   const subscribe = useCallback((change: () => void) => subscribeToTable(tableId, change), [tableId]);
   const getSnapshot = useCallback(() => storageSnapshot(tableId), [tableId]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, serverSnapshot);
-  const { cart, latestOrderId } = readSnapshot(snapshot ?? null);
+  const { cart, latestOrderId, latestLiveOrderId } = readSnapshot(snapshot ?? null);
+  const latest = mode === "live" ? latestLiveOrderId : latestOrderId;
 
   return (
     <main className="ordering" data-screen={screen.name} tabIndex={-1}>
-      {screen.name === "menu" && <Menu base={base} tableId={tableId} hasCart={!!cart} latest={latestOrderId} />}
+      {screen.name === "menu" && <Menu base={base} tableId={tableId} hasCart={!!cart} latest={latest} mode={mode} />}
       {screen.name === "product" && <Product key={screen.productId} base={base} tableId={tableId} product={findCoffee(screen.productId)!} selection={cart} />}
       {(screen.name === "cart" || screen.name === "checkout") && (
-        <Basket key={screen.name} base={base} tableId={tableId} ready={snapshot !== undefined} selection={cart} latest={latestOrderId} checkout={screen.name === "checkout"} />
+        <Basket key={screen.name} base={base} tableId={tableId} ready={snapshot !== undefined} selection={cart} latest={latest} mode={mode} checkout={screen.name === "checkout"} />
       )}
-      {"orderId" in screen && <OrderScreen key={screen.orderId + screen.name} base={base} tableId={tableId} id={screen.orderId} tracking={screen.name === "tracking"} />}
+      {"orderId" in screen && <OrderScreen key={screen.orderId + screen.name} base={base} tableId={tableId} id={screen.orderId} tracking={screen.name === "tracking"} mode={mode} />}
     </main>
   );
 }

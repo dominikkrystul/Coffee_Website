@@ -101,13 +101,14 @@ export function ConfirmationRobot() {
 const start = 24;
 const destination = 208;
 
-export function DeliveryJourney({ tableId, status }: { tableId: TableId; status: OrderStatus }) {
+export function DeliveryJourney({ tableId, status, paused = false }: { tableId: TableId; status: OrderStatus; paused?: boolean }) {
   const reduce = useReducedMotion();
-  const travelling = status === "delivering";
+  const travelling = status === "delivering" && !paused;
   const delivered = status === "delivered";
-  const stopped = status === "failed" || status === "cancelled";
-  const cup = status === "ready" || travelling || delivered;
-  const position = useMotionValue(delivered ? destination : travelling ? (start + destination) / 2 : start);
+  const parked = status === "arrived" || delivered;
+  const stopped = paused || status === "failed" || status === "cancelled";
+  const cup = status === "ready" || status === "delivering" || parked;
+  const position = useMotionValue(parked ? destination : travelling ? (start + destination) / 2 : start);
   const transform = useTransform(position, (value) => `translateX(${value}px)`);
   const movingOpacity = useTransform(position, [start, start + 20, destination - 18, destination], [0.35, 1, 1, 0.35]);
 
@@ -117,15 +118,15 @@ export function DeliveryJourney({ tableId, status }: { tableId: TableId; status:
       const ride = animate(position, [start, destination], { duration: 5, ease: "linear", repeat: Infinity });
       return () => ride.stop();
     }
-    if (delivered && !reduce) {
+    if (parked && !reduce) {
       const park = animate(position, destination, { duration: 0.55, ease: easeOut });
       return () => park.stop();
     }
-    position.set(delivered ? destination : travelling ? (start + destination) / 2 : start);
-  }, [delivered, position, reduce, stopped, travelling]);
+    position.set(parked ? destination : travelling ? (start + destination) / 2 : start);
+  }, [parked, position, reduce, stopped, travelling]);
 
   return (
-    <section className="delivery-journey" data-journey={status} aria-label="Illustrated demo delivery journey">
+    <section className="delivery-journey" data-journey={status} aria-label="Illustrated delivery journey">
       <h2>Delivery journey</h2>
       <div className="journey-scene" aria-hidden="true">
         <div className="journey-endpoint"><Store size={25} strokeWidth={1.65} /></div>
