@@ -11,7 +11,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
-    "qr": "node scripts/print-qr.mjs"
+    "qr": "node scripts/print-qr.mjs",
+    "test:live": "node tests/live-production.cjs"
   },
   "dependencies": {
     "geist": "^1.9.2",

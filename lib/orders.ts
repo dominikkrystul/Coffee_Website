@@ -3,7 +3,7 @@ import type { TableId } from "./catalog";
 export const deliveryStages = ["received", "preparing", "ready", "delivering", "delivered"] as const;
 export const liveDeliveryStages = [deliveryStages[0], deliveryStages[1], deliveryStages[2], deliveryStages[3], "arrived", "delivered"] as const;
 export const orderUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
-export type OrderMode = "live" | "demo";
+export type OrderMode = "live" | "demo" | "unavailable";
 export type OrderStatus = (typeof deliveryStages)[number] | "arrived" | "failed" | "cancelled";
 
 export type CartSelection = {

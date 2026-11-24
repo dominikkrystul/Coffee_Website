@@ -3,9 +3,9 @@ import { liveDeliveryStages, orderUuid, type CustomerOrder, type OrderMode } fro
 
 export function orderMode(): OrderMode {
   const mode = process.env.COFFEE_ORDER_MODE;
-  if (mode === undefined || mode === "demo") return "demo";
-  if (mode === "live") return "live";
-  throw new Error("COFFEE_ORDER_MODE must be demo or live.");
+  if (mode === "live" || mode === "demo") return mode;
+  if (mode === undefined && process.env.VERCEL_ENV !== "production") return "demo";
+  return "unavailable";
 }
 
 export class OrderServiceError extends Error {
@@ -44,14 +44,28 @@ async function requestOrder(path: string, init: RequestInit) {
       redirect: "error",
       signal: AbortSignal.timeout(4000),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new OrderServiceError(504, "The order service took too long to respond. Try again.");
+    }
     throw unavailable();
   }
-  if (response.headers.get("x-coffee-order-api") !== "1") throw unavailable();
+  if (response.status === 429) {
+    throw new OrderServiceError(429, "The order service is busy. Try again shortly.");
+  }
+  if (response.headers.get("x-coffee-order-api") !== "1") {
+    if (response.status === 503) throw unavailable();
+    throw new OrderServiceError(502, "The order service returned an unexpected response. Try again.");
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new OrderServiceError(502, "The order service connection could not be authenticated. Try again.");
+  }
   if (response.status === 404) throw new OrderServiceError(404, "Order unavailable.");
   if (response.status === 409) throw new OrderServiceError(409, "That order reference belongs to another selection.");
-  if (response.status === 429) throw new OrderServiceError(429, "The order service is busy. Try again shortly.");
   if (!response.ok) throw unavailable();
+  if (!/^application\/json(?:;|$)/i.test(response.headers.get("content-type") ?? "")) {
+    throw new OrderServiceError(502, "The order service returned an unexpected response. Try again.");
+  }
 
   try {
     const { order, token } = await response.json();
@@ -67,7 +81,7 @@ async function requestOrder(path: string, init: RequestInit) {
     };
     return { order: customerOrder, token, status: response.status };
   } catch {
-    throw unavailable();
+    throw new OrderServiceError(502, "The order service returned an invalid order. Try again.");
   }
 }
 
@@ -132,7 +146,9 @@ export async function orderResponse(request: Request, handle: () => Promise<{ bo
         (site && !["same-origin", "none"].includes(site))) {
       throw new OrderServiceError(403, "Same-origin order request required.");
     }
-    if (orderMode() !== "live") throw new OrderServiceError(503, "Live orders are disabled.");
+    const mode = orderMode();
+    if (mode === "demo") throw new OrderServiceError(503, "Live orders are disabled.");
+    if (mode === "unavailable") throw unavailable();
     const { body, status } = await handle();
     return Response.json(body, { status, headers });
   } catch (error) {

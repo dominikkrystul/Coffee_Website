@@ -57,7 +57,7 @@ function Menu({ base, tableId, hasCart, latest, mode }: { base: string; tableId:
             </motion.li>
           ))}
         </ul>
-        {latest && <Link className="text-link past-order" href={`${base}/order/${latest}/tracking`}>{mode === "live" ? "Track your latest order" : "Track your latest demo order"} <ArrowRight size={16} /></Link>}
+        {latest && <Link className="text-link past-order" href={`${base}/order/${latest}/tracking`}>{mode !== "demo" ? "Track your latest order" : "Track your latest demo order"} <ArrowRight size={16} /></Link>}
       </div>
       {hasCart && (
         <div className="action-bar">
@@ -133,7 +133,7 @@ function Basket({ base, tableId, selection, latest, ready, checkout, mode }: {
   base: string; tableId: TableId; selection: CartSelection | null; latest?: string; ready: boolean; checkout: boolean; mode: OrderMode;
 }) {
   const router = useRouter();
-  const live = mode === "live";
+  const live = mode !== "demo";
   const submitting = useRef(false);
   const [pending, setPending] = useState<CartSelection | null>(null);
   const [error, setError] = useState("");
@@ -192,8 +192,9 @@ function Basket({ base, tableId, selection, latest, ready, checkout, mode }: {
               <aside className="notice">
                 <Info aria-hidden="true" size={20} />
                 <div>
-                  <strong>{live ? "Coffee Cup checkout" : "Demo checkout"}</strong>
-                  <p>{live ? "No payment is collected. The café will prepare your order and dispatch it when ready." :
+                  <strong>{mode === "unavailable" ? "Order service unavailable" : live ? "Coffee Cup checkout" : "Demo checkout"}</strong>
+                  <p>{mode === "unavailable" ? "Live ordering is temporarily unavailable. Your cart is saved." :
+                    live ? "No payment is collected. The café will prepare your order and dispatch it when ready." :
                     "No real payment will be processed. This order is part of the Robot Coffee Cup demonstration."}</p>
                 </div>
               </aside>
@@ -206,7 +207,7 @@ function Basket({ base, tableId, selection, latest, ready, checkout, mode }: {
             <h2 tabIndex={-1} ref={emptyTitle}>Your cart is empty</h2>
             <p>Choose a coffee from the menu.</p>
             <Link href={base} className="button secondary">Browse menu<ArrowRight size={19} /></Link>
-            {latest && <Link className="text-link" href={`${base}/order/${latest}/tracking`}>{mode === "live" ? "Track your latest order" : "Track your latest demo order"}</Link>}
+            {latest && <Link className="text-link" href={`${base}/order/${latest}/tracking`}>{mode !== "demo" ? "Track your latest order" : "Track your latest demo order"}</Link>}
           </motion.div>
         )}
       </div>
@@ -232,7 +233,7 @@ export function Ordering({ tableId, screen, mode }: { tableId: TableId; screen: 
   const getSnapshot = useCallback(() => storageSnapshot(tableId), [tableId]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, serverSnapshot);
   const { cart, latestOrderId, latestLiveOrderId } = readSnapshot(snapshot ?? null);
-  const latest = mode === "live" ? latestLiveOrderId : latestOrderId;
+  const latest = mode === "demo" ? latestOrderId : latestLiveOrderId;
 
   return (
     <main className="ordering" data-screen={screen.name} tabIndex={-1}>

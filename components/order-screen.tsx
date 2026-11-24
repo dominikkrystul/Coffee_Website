@@ -135,7 +135,7 @@ export function OrderScreen({ base, tableId, id, tracking, mode }: { base: strin
   const [order, setOrder] = useState<CustomerOrder | null>();
   const [failed, setFailed] = useState(false);
 
-  const live = mode === "live";
+  const live = mode !== "demo";
 
   useEffect(() => {
     const adapter = live ? httpOrderAdapter : demoOrderAdapter;
