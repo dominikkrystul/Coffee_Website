@@ -24,6 +24,11 @@ export type CustomerOrder = OrderRequest & {
   price: number;
   productName: string;
   execution?: "sim" | "robot";
+  tableArrivalAt?: string;
+  pickupDeadline?: number;
+  serverTime?: number;
+  departureWait?: "spotter_clearance" | "return_pending";
+  pickupDeadlineLocal?: number;
 };
 
 export type OrderSubmissionResult = { order: CustomerOrder };

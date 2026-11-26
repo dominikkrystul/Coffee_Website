@@ -18,7 +18,7 @@ const statusCopy = {
   preparing: { title: "Preparing coffee", detail: "In the demo, the café is preparing your coffee." },
   ready: { title: "Ready for delivery", detail: "The coffee is ready. A real run requires the operator to confirm the cup is loaded." },
   delivering: { title: "On the way", detail: "The demo delivery is on its way to your table." },
-  arrived: { title: "At your table", detail: "The robot reached your table. Handoff is awaiting confirmation." },
+  arrived: { title: "At your table", detail: "The robot reached your table." },
   delivered: { title: "Delivered", detail: "Your simulated delivery is complete." },
   failed: { title: "Delivery failed", detail: "The simulated delivery could not be completed." },
   cancelled: { title: "Order cancelled", detail: "This demo order was cancelled." },
@@ -31,7 +31,7 @@ const liveDetails: Partial<Record<OrderStatus, string>> = {
   preparing: "The café is preparing your coffee.",
   ready: "Coffee is loaded. The operator will dispatch the robot when ready.",
   delivering: "The robot is heading to your table.",
-  delivered: "The operator confirmed your coffee was handed off.",
+  delivered: "The robot completed the pickup stop and has started its return.",
   failed: "The operator or mission controller reported that this order could not be completed.",
   cancelled: "This order was cancelled by the operator.",
 };
@@ -87,6 +87,28 @@ function Timeline({ status, live }: { status: OrderStatus; live: boolean }) {
   );
 }
 
+function PickupCountdown({ order, disconnected }: { order: CustomerOrder; disconnected: boolean }) {
+  const deadline = order.pickupDeadlineLocal ?? order.pickupDeadline;
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(timer);
+  }, []);
+  const remaining = deadline === undefined ? null : Math.min(5, Math.max(0, Math.ceil((deadline - now) / 1000)));
+  return (
+    <>
+      <strong>Your coffee has arrived!</strong>
+      <p>{order.execution === "sim" ? "Simulated pickup at your table." : "Please take your coffee from the robot."}</p>
+      {remaining !== null && remaining > 0 && (
+        <p role="timer" aria-label={`${remaining} seconds remaining for pickup`}>{remaining} s</p>
+      )}
+      {remaining === 0 && <p role="status">{disconnected ? "Waiting for a tracking update." :
+        order.departureWait === "spotter_clearance" ? "The robot is waiting until the platform and area are clear." :
+        "The robot is preparing to return."}</p>}
+    </>
+  );
+}
+
 function Tracking({ base, order, live, disconnected }: { base: string; order: CustomerOrder; live: boolean; disconnected: boolean }) {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState("");
@@ -116,8 +138,12 @@ function Tracking({ base, order, live, disconnected }: { base: string; order: Cu
       <Timeline status={status} live={live} />
       <div className="tracking-message" aria-live="polite" aria-atomic="true">
         <motion.div key={status} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <strong className={status === "failed" || status === "cancelled" ? undefined : "sr-only"}>{statusCopy[status].title}</strong>
-          <p>{(live && liveDetails[status]) || statusCopy[status].detail}</p>
+          {live && status === "arrived" ? <PickupCountdown order={order} disconnected={disconnected} /> : (
+            <>
+              <strong className={status === "failed" || status === "cancelled" ? undefined : "sr-only"}>{statusCopy[status].title}</strong>
+              <p>{(live && liveDetails[status]) || statusCopy[status].detail}</p>
+            </>
+          )}
         </motion.div>
       </div>
       {!live && status === "received" && (

@@ -102,11 +102,37 @@ async function main() {
   await listen(app.orderServer,orderPort);
   await expect(step).toContainText('Ready for delivery');
   await expect(page.locator('main [role=alert]')).toHaveCount(0);
+  const pickupDeadline = Date.now() + 5000;
+  let serverAdvance=0;
+  let trackingOrder = { ...order, status:'arrived', execution:'robot', tableArrivalAt:new Date(pickupDeadline - 5000).toISOString(),
+    pickupDeadline, departureWait:'spotter_clearance' };
+  await page.route('**/api/orders/' + order.id, route =>
+    route.fulfill({json:{order:{...trackingOrder,serverTime:Date.now()+serverAdvance}}}));
+  await page.reload();
+  await expect(page.getByText('Your coffee has arrived!')).toBeVisible();
+  const timer=page.getByRole('timer');
+  await expect(timer).toBeVisible();
+  const initialSeconds=parseInt(await timer.textContent(),10);
+  await page.clock.install();
+  serverAdvance+=2000;
+  await page.clock.fastForward(2000);
+  await page.reload();
+  await expect(timer).toBeVisible();
+  assert.ok(parseInt(await timer.textContent(),10)<initialSeconds);
+  serverAdvance+=5000;
+  await page.clock.fastForward(5000);
+  await expect(page.getByText('The robot is waiting until the platform and area are clear.')).toBeVisible();
+  await expect(step).toContainText('At your table');
+  trackingOrder={...trackingOrder,status:'delivered',departureWait:undefined};
+  await page.clock.fastForward(2500);
+  await expect(step).toContainText('Delivered');
+  await expect(timer).toHaveCount(0);
+
   for (const file of readdirSync('.next/static',{recursive:true}).filter(file=>file.endsWith('.js'))) {
     const chunk=readFileSync(join('.next/static',file),'utf8');
     for (const value of [secret,orderOrigin,'COFFEE_ORDER_API_SECRET','COFFEE_ORDER_API_URL']) assert.ok(!chunk.includes(value));
   }
-  console.log('Production build passed: missing mode, live mode, old demo data, retry, accepted order and queue ID, idempotency, poll, refresh, disconnect, reconnect, no credential in client chunks.');
+  console.log('Production build passed: missing mode, live mode, old demo data, retry, accepted order and queue ID, idempotency, poll, refresh, disconnect, reconnect, pickup timer, safety wait, Delivered, no credential in client chunks.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{
   if (browser) await browser.close();

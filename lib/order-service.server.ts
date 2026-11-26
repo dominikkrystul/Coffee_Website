@@ -77,6 +77,14 @@ async function requestOrder(path: string, init: RequestInit) {
     const customerOrder: CustomerOrder = {
       id: order.id, tableId: order.tableId, productId: coffee.id, quantity: 1,
       createdAt: order.createdAt, status: order.status, price: coffee.price, productName: coffee.name,
+      ...(typeof order.tableArrivalAt === "string" && Number.isFinite(Date.parse(order.tableArrivalAt)) && {
+        tableArrivalAt: order.tableArrivalAt,
+      }),
+      ...(Number.isSafeInteger(order.pickupDeadline) && { pickupDeadline: order.pickupDeadline }),
+      ...(Number.isSafeInteger(order.serverTime) && { serverTime: order.serverTime }),
+      ...((order.departureWait === "spotter_clearance" || order.departureWait === "return_pending") && {
+        departureWait: order.departureWait,
+      }),
       ...(order.execution === "sim" || order.execution === "robot" ? { execution: order.execution } : {}),
     };
     return { order: customerOrder, token, status: response.status };

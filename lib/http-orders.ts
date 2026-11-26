@@ -25,13 +25,19 @@ export const httpOrderAdapter: OrderAdapter = {
   async get(tableId, id, signal) {
     const token = liveOrderToken(tableId, id);
     if (!token) return null;
+    const requestStarted = Date.now();
     const response = await fetch("/api/orders/" + encodeURIComponent(id), {
       headers: { "X-Order-Token": token }, cache: "no-store", signal,
     });
     if (response.status === 404) return null;
     if (!response.ok) throw await orderError(response);
     const { order }: OrderSubmissionResult = await response.json();
-    return order.tableId === tableId && order.id === id ? order : null;
+    if (order.tableId !== tableId || order.id !== id) return null;
+    if (order.pickupDeadline !== undefined && order.serverTime !== undefined) {
+      const midpoint = (requestStarted + Date.now()) / 2;
+      return { ...order, pickupDeadlineLocal: midpoint + order.pickupDeadline - order.serverTime };
+    }
+    return order;
   },
 
   subscribe(_tableId, _id, onChange) {
